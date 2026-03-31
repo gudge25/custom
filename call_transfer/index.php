@@ -1,7 +1,7 @@
 <?php
-// Enable error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+require_once dirname(__DIR__) . '/bootstrap.php';
+
+requireFeature('FEATURE_CALL_TRANSFER', 'Call Transfer Report');
 
 $pageName = 'Call Transfer Report';
 $summaryData = [];
@@ -10,100 +10,78 @@ $error = '';
 $debug = '';
 $fromDate = '';
 $toDate = '';
+$showDebug = env('APP_ENV') !== 'production';
 
 if (isset($_POST['from']) && isset($_POST['to'])) {
-    $fromDate = $_POST['from'];
-    $toDate = $_POST['to'];
-    
+    $fromDate = trim((string) $_POST['from']);
+    $toDate = trim((string) $_POST['to']);
+
     $debug .= "POST data received: From = $fromDate, To = $toDate\n";
-    
-    $link = mysqli_connect('localhost', 'root', '');
-    if (!$link) {
-        $error = 'Connection error: ' . mysqli_error($link);
-        $debug .= "Connection failed: " . mysqli_error($link) . "\n";
+
+    $datePattern = '/^\d{4}-\d{2}-\d{2}$/';
+
+    if (!preg_match($datePattern, $fromDate) || !preg_match($datePattern, $toDate)) {
+        $error = 'Invalid date format. Please use the date picker.';
+        $debug .= "Date validation failed\n";
     } else {
-        $debug .= "Database connection successful\n";
-        
-        if (!mysqli_select_db($link, 'asteriskcdrdb')) {
-            $error = 'Can\'t select database: ' . mysqli_error($link);
-            $debug .= "Database selection failed: " . mysqli_error($link) . "\n";
-        } else {
-            $debug .= "Database asteriskcdrdb selected successfully\n";
-            
-            $from = mysqli_real_escape_string($link, $fromDate);
-            $to = mysqli_real_escape_string($link, $toDate);
-            
-            $debug .= "Escaped dates: From = $from, To = $to\n";
+        $summaryQuery = "
+            select
+                substring(cdr.clid, 3, 4) as acct,
+                sec_to_time(sum(cdr.duration)) as total_patchtime
+            from cdr cdr
+            where cast(cdr.calldate as date) between :from_date and :to_date
+              and cdr.accountcode = 'Outbound'
+              and (cdr.dst not in ('*80','*89','*50') and char_length(cdr.dst) = 3)
+              and char_length(cdr.src) != 3
+              and left(cdr.dstchannel, 3) <> 'PJSIP'
+            group by acct
+            order by acct
+        ";
 
-            // Summary table query
-            $summary_query = "
-                select
-                    substring(cdr.clid, 3, 4) as acct,
-                    sec_to_time(sum(cdr.duration)) as total_patchtime
-                from asteriskcdrdb.cdr cdr
-                where cast(cdr.calldate as date) between '" . $from . "' and '" . $to . "'
-                  and cdr.accountcode = 'Outbound'
-                  and (cdr.dst not in ('*80','*89','*50') and char_length(cdr.dst) = 3)
-                  and char_length(cdr.src) != 3
-                  and left(cdr.dstchannel, 3) <> 'PJSIP'
-                group by acct
-                order by acct
-            ";
-            
-            $debug .= "Summary Query: " . $summary_query . "\n";
+        $mainQuery = "
+            select
+                cdr.calldate,
+                substring(cdr.clid, 3, 4) as acct,
+                cdr.src as caller,
+                cdr.dst as ext,
+                sec_to_time(cdr.duration) as patchtime,
+                cdr.uniqueid,
+                cdr.lastapp,
+                cdr.linkedid
+            from cdr cdr
+            where cast(cdr.calldate as date) between :from_date and :to_date
+              and cdr.accountcode = 'Outbound'
+              and (cdr.dst not in ('*80','*89','*50') and char_length(cdr.dst) = 3)
+              and char_length(cdr.src) != 3
+              and left(cdr.dstchannel, 3) <> 'PJSIP'
+            order by cdr.calldate
+        ";
 
-            $summary_result = mysqli_query($link, $summary_query);
-            if ($summary_result) {
-                $summary_count = mysqli_num_rows($summary_result);
-                $debug .= "Summary query executed successfully. Rows found: $summary_count\n";
-                
-                while ($row = mysqli_fetch_assoc($summary_result)) {
-                    $summaryData[] = $row;
-                }
-                mysqli_free_result($summary_result);
-            } else {
-                $error = 'Summary query error: ' . mysqli_error($link);
-                $debug .= "Summary query failed: " . mysqli_error($link) . "\n";
-            }
+        $debug .= "Using database: " . env('DB_NAME', 'not set') . "\n";
+        $debug .= "Running prepared queries with from_date = $fromDate and to_date = $toDate\n";
 
-            // Main query
-            $query = "
-                select
-                    cdr.calldate,
-                    substring(cdr.clid, 3, 4) as acct,
-                    cdr.src as caller,
-                    cdr.dst as ext,
-                    sec_to_time(cdr.duration) as patchtime,
-                    cdr.uniqueid,
-                    cdr.lastapp,
-                    cdr.linkedid
-                from asteriskcdrdb.cdr cdr
-                where cast(cdr.calldate as date) between '" . $from . "' and '" . $to . "'
-                  and cdr.accountcode = 'Outbound'
-                  and (cdr.dst not in ('*80','*89','*50') and char_length(cdr.dst) = 3)
-                  and char_length(cdr.src) != 3
-                  and left(cdr.dstchannel, 3) <> 'PJSIP'
-                order by cdr.calldate
-            ";
-            
-            $debug .= "Main Query: " . $query . "\n";
+        try {
+            $pdo = db();
+            $debug .= "Database connection successful\n";
 
-            $result = mysqli_query($link, $query);
-            if ($result) {
-                $main_count = mysqli_num_rows($result);
-                $debug .= "Main query executed successfully. Rows found: $main_count\n";
-                
-                while ($row = mysqli_fetch_assoc($result)) {
-                    $mainData[] = $row;
-                }
-                mysqli_free_result($result);
-            } else {
-                $error = 'Main query error: ' . mysqli_error($link);
-                $debug .= "Main query failed: " . mysqli_error($link) . "\n";
-            }
+            $summaryStmt = $pdo->prepare($summaryQuery);
+            $summaryStmt->execute([
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+            ]);
+            $summaryData = $summaryStmt->fetchAll();
+            $debug .= 'Summary query executed successfully. Rows found: ' . count($summaryData) . "\n";
 
-            mysqli_close($link);
-            $debug .= "Database connection closed\n";
+            $mainStmt = $pdo->prepare($mainQuery);
+            $mainStmt->execute([
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+            ]);
+            $mainData = $mainStmt->fetchAll();
+            $debug .= 'Main query executed successfully. Rows found: ' . count($mainData) . "\n";
+        } catch (PDOException $e) {
+            $error = 'Query error: ' . $e->getMessage();
+            $debug .= 'Query failed: ' . $e->getMessage() . "\n";
         }
     }
 } else {
@@ -244,7 +222,7 @@ if (isset($_POST['from']) && isset($_POST['to'])) {
             </div>
         <?php endif; ?>
 
-        <?php if ($debug !== ''): ?>
+        <?php if ($showDebug && $debug !== ''): ?>
             <div class="mb-4 max-w-6xl rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                 <h4 class="font-semibold mb-2">Debug Information:</h4>
                 <pre class="whitespace-pre-wrap"><?php echo htmlspecialchars($debug); ?></pre>
