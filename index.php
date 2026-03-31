@@ -17,7 +17,7 @@
             font-size: 28px;
             margin-bottom: 20px;
         }
-        a {
+        /* a {
             display: inline-block;
             margin: 10px 0;
             padding: 12px 18px;
@@ -31,6 +31,31 @@
         a:hover {
             background: #334155;
             color: #bfdbfe;
+        } */
+        a {
+        display: inline-block;
+        margin: 10px 0;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border-radius: 10px;
+        color: #93c5fd;
+        text-decoration: none;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        transition: all 0.25s ease;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        }
+
+        a:hover {
+        background: linear-gradient(135deg, #1e40af, #0ea5e9);
+        color: #e0f2fe;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 22px rgba(14, 165, 233, 0.35);
+        }
+
+        a:active {
+        transform: scale(0.97);
         }
     </style>
 </head>
