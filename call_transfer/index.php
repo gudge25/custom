@@ -179,7 +179,7 @@ if (isset($_POST['from']) && isset($_POST['to'])) {
 
     <div class="max-w-6xl mx-auto">
         <div class="card p-6 mb-6">
-            <h2 class="text-lg font-semibold text-slate-100 mb-4">Date Range Selection</h2>
+            <!-- <h2 class="text-lg font-semibold text-slate-100 mb-4">Date Range Selection</h2> -->
             
             <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
