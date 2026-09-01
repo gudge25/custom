@@ -4,7 +4,7 @@
  * lines from the last N minutes and store them in `registrations`.
  *
  * Run every 15 minutes, e.g.:
- *   /15 * * * * php /path/to/custom/voice_agent/collect_rtt.php >> /path/to/custom/voice_agent/collect_rtt.log 2>&1
+ *   /15 * * * * php /path/to/custom/agent_latency/collect_rtt.php >> /path/to/custom/agent_latency/collect_rtt.log 2>&1
  *
  * Example source line (/var/log/asterisk/full):
  *   [2026-09-01 07:25:13] VERBOSE[16735] res_pjsip/pjsip_options.c: Contact 225/sip:225@79.117.161.109:56656;... is now Reachable.  RTT: 102.764 msec

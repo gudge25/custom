@@ -31,7 +31,7 @@ survives a restart.
 Now run the schema once against the Asterisk CDR database:
 
 ```bash
-mysql -u root asteriskcdrdb < voice_agent/schema.sql
+mysql -u root asteriskcdrdb < agent_latency/schema.sql
 ```
 
 This creates `registrations` (`name`, `roundtrip_usec`,
@@ -77,7 +77,7 @@ crontab -e
 Add:
 
 ```
-*/15 * * * * php /var/www/html/custom/voice_agent/collect_rtt.php >> /var/www/html/custom/voice_agent/collect_rtt.log 2>&1
+*/15 * * * * php /var/www/html/custom/agent_latency/collect_rtt.php >> /var/www/html/custom/agent_latency/collect_rtt.log 2>&1
 ```
 
 Adjust the path to wherever this repo is checked out on the server.
@@ -85,7 +85,7 @@ Adjust the path to wherever this repo is checked out on the server.
 ## 4. Verify it's working
 
 ```bash
-tail -f /var/www/html/custom/voice_agent/collect_rtt.log
+tail -f /var/www/html/custom/agent_latency/collect_rtt.log
 mysql -u root asteriskcdrdb -e "SELECT * FROM registrations ORDER BY id DESC LIMIT 5;"
 ```
 

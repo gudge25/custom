@@ -6,7 +6,7 @@ A lightweight PHP dashboard suite for PBX and call-center operations. The projec
 
 The application currently provides a small set of live tools plus several placeholder pages for future work.
 
-- `voice_agent/` - latency dashboard for voice-agent registrations using the `registrations` table.
+- `agent_latency/` - latency dashboard for voice-agent registrations using the `registrations` table.
 - `call_surveys/` - survey dashboard with KPI cards, charts, search, and a full table sourced from the `survey` table.
 - `call_transfer/` - date-range transfer report built on top of the PBX `cdr` table.
 - `queue_alert/` - form for saving queue-to-alert-number settings in `queue_alert_settings.json`.
@@ -19,7 +19,7 @@ The application currently provides a small set of live tools plus several placeh
 ├── index.php                # Landing page with links to all modules
 ├── bootstrap.php            # Env loader, feature flags, PDO helper, shared utilities
 ├── .env.example             # Example configuration
-├── voice_agent/
+├── agent_latency/
 ├── call_surveys/
 ├── call_transfer/
 ├── queue_alert/
@@ -97,7 +97,7 @@ http://localhost:8000/
 
 ### Voice Agent Latency
 
-`voice_agent/index.php` reads the `registrations` table and shows:
+`agent_latency/index.php` reads the `registrations` table and shows:
 
 - the highest average roundtrip times
 - a selectable list of agent names
