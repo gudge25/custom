@@ -216,7 +216,7 @@ try {
             <?php endif; ?>
 
             <div class="pt-4">
-                <a href="../index.php" class="text-sm text-sky-300 hover:text-sky-200">Back to Home</a>
+                <a href="../index.php" class="text-sm text-sky-300 hover:text-sky-200">← Back to Home</a>
             </div>
         </div>
     </div>
