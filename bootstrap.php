@@ -84,7 +84,12 @@ function db() {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ]);
     } catch (Exception $e) {
-        // Stop execution on DB error
+        // TODO: die() here leaks the raw PDO error message to the browser
+        // regardless of APP_ENV, and bypasses each page's own error handling
+        // (e.g. call_transfer/index.php gates its query-error message behind
+        // APP_ENV, but a connection failure never reaches that code at all).
+        // Should log the detail server-side and show a generic message when
+        // APP_ENV === 'production'.
         die("DB error: " . $e->getMessage());
     }
 
