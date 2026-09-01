@@ -62,7 +62,7 @@
 <body>
     <h1>GIXO Custom Pages</h1>
 
-    <a href="agent_latency/" title="Open voice agent latency report">⚡ Voice Agent Latency</a>
+    <a href="agent_latency/" title="Open agent latency report">⚡ Agent Latency</a>
     <a href="call_analytics/" title="Open call analytics page">📈 Call Analytics</a>
     <a href="call_surveys/" title="Open call surveys dashboard">📊 Call Surveys Dashboard</a>
     <a href="queue_alert/" title="Configure queue and alert number settings">🚨 Queue Alert</a>

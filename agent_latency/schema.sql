@@ -1,4 +1,4 @@
--- Voice Agent Latency Report: registrations table + 10-day retention event
+-- Agent Latency Report: registrations table + 10-day retention event
 -- Run once against asteriskcdrdb (matches DB_NAME in .env).
 -- Requires the MySQL/MariaDB event scheduler to be ON — see README.md.
 
