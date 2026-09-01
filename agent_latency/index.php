@@ -69,7 +69,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Agent Latency Report</title>
+    <title>Agent Latency Report</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -143,7 +143,7 @@ try {
                 <span class="text-white text-xl font-semibold">⚡</span>
             </div>
             <div>
-                <h1 class="text-xl font-semibold text-slate-50">Voice Agent Latency Report</h1>
+                <h1 class="text-xl font-semibold text-slate-50">Agent Latency Report</h1>
                 <p class="text-xs text-slate-400">Registration latency monitoring</p>
             </div>
         </div>

@@ -1,4 +1,4 @@
-# Voice Agent Latency Report
+# Agent Latency Report
 
 Tracks SIP registration round-trip time (RTT) per agent/extension and
 shows it as a dropdown-driven latency graph in `index.php`.

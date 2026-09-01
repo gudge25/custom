@@ -43,7 +43,7 @@ The application currently provides a small set of live tools plus several placeh
 Copy `.env.example` to `.env` and adjust the values for your environment.
 
 ```env
-FEATURE_VOICE_AGENT=1
+FEATURE_AGENT_LATENCY=1
 FEATURE_CALL_ANALYTICS=1
 FEATURE_CALL_SURVEYS=1
 FEATURE_QUEUE_ALERT=1
@@ -58,7 +58,7 @@ DB_NAME=asteriskcdrdb
 DB_USER=root
 DB_PASS=
 
-APP_NAME="Voice Agent Latency Report"
+APP_NAME="Agent Latency Report"
 APP_ENV=production
 
 MAIL_FROM=operator@example.com
@@ -95,7 +95,7 @@ http://localhost:8000/
 
 ## Module Notes
 
-### Voice Agent Latency
+### Agent Latency
 
 `agent_latency/index.php` reads the `registrations` table and shows:
 
