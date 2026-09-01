@@ -1,99 +1,113 @@
 <?php
-// Set timezone to avoid warnings
+require_once dirname(__DIR__) . '/bootstrap.php';
+
 date_default_timezone_set('UTC');
 
-/***********************
- * DB CONFIG
- ***********************/
-$dbHost = 'localhost';
-$dbName = 'asteriskcdrdb';
-$dbUser = 'root';
-$dbPass = '';
+/**
+ * Compute every KPI/chart/table value this page needs from a flat list of
+ * survey rows - used for both real DB rows and the demo fixture, so the two
+ * can never drift apart.
+ */
+function computeSurveyMetrics(array $rows): array
+{
+    $totalSurveys = count($rows);
+    $avgRating = $totalSurveys ? array_sum(array_column($rows, 'valuation')) / $totalSurveys : 0;
 
-$dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
-$options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-];
-$pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+    $today = date('Y-m-d');
+    $totalToday = count(array_filter($rows, fn($r) => substr($r['date'], 0, 10) === $today));
 
-/***********************
- * RAW DATA
- ***********************/
-$rows = $pdo->query("
-    SELECT num, operator, queue, valuation, date
-    FROM survey
-    ORDER BY date DESC
-")->fetchAll();
+    $byOperator = [];
+    foreach ($rows as $r) {
+        $op = $r['operator'];
+        $byOperator[$op]['total'] = ($byOperator[$op]['total'] ?? 0) + 1;
+        $byOperator[$op]['sum'] = ($byOperator[$op]['sum'] ?? 0) + $r['valuation'];
+    }
+    $topAgents = [];
+    foreach ($byOperator as $operator => $stats) {
+        $topAgents[] = [
+            'operator' => $operator,
+            'avgscore' => $stats['sum'] / $stats['total'],
+            'total' => $stats['total'],
+        ];
+    }
+    usort($topAgents, fn($a, $b) => $b['avgscore'] <=> $a['avgscore'] ?: $b['total'] <=> $a['total']);
+    $topAgent = $topAgents[0] ?? null;
 
-/***********************
- * SUMMARY METRICS
- ***********************/
-$totalSurveys = count($rows);
+    $highScore = 4; // 1-5 scale, "satisfied" = 4 or 5
+    $highCount = count(array_filter($rows, fn($r) => $r['valuation'] >= $highScore));
+    $highPercent = $totalSurveys ? round($highCount / $totalSurveys * 100) : 0;
 
-$avgRating = $totalSurveys
-    ? $pdo->query("SELECT AVG(valuation) FROM survey")->fetchColumn()
-    : 0;
+    $ratingCounts = array_fill(1, 5, 0);
+    foreach ($rows as $r) {
+        $ratingCounts[$r['valuation']] = ($ratingCounts[$r['valuation']] ?? 0) + 1;
+    }
+    $ratingDist = [];
+    foreach ($ratingCounts as $rating => $cnt) {
+        $ratingDist[] = ['rating' => $rating, 'cnt' => $cnt];
+    }
 
-$today = date('Y-m-d');
-$totalToday = $pdo->query("
-    SELECT COUNT(*) FROM survey WHERE DATE(date) = '$today'
-")->fetchColumn();
+    $byDay = [];
+    foreach ($rows as $r) {
+        $day = substr($r['date'], 0, 10);
+        $byDay[$day]['total'] = ($byDay[$day]['total'] ?? 0) + 1;
+        $byDay[$day]['sum'] = ($byDay[$day]['sum'] ?? 0) + $r['valuation'];
+    }
+    ksort($byDay);
+    $trend = [];
+    foreach ($byDay as $day => $stats) {
+        $trend[] = ['day' => $day, 'avgscore' => $stats['sum'] / $stats['total'], 'total' => $stats['total']];
+    }
 
-$topAgent = $pdo->query("
-    SELECT operator, AVG(valuation) AS avgscore, COUNT(*) AS total
-    FROM survey
-    GROUP BY operator
-    ORDER BY avgscore DESC, total DESC
-    LIMIT 1
-")->fetch();
-
-$highScore = 4; // 1–5 шкала, “задоволений” = 4 або 5
-$highCount = $pdo->query("
-    SELECT COUNT(*) FROM survey WHERE valuation >= $highScore
-")->fetchColumn();
-$highPercent = $totalSurveys ? round($highCount / $totalSurveys * 100) : 0;
-
-/***********************
- * CHART DATA
- ***********************/
-
-// Rating distribution
-$ratingDist = [];
-$stmt = $pdo->query("
-    SELECT valuation AS rating, COUNT(*) AS cnt
-    FROM survey
-    GROUP BY valuation
-    ORDER BY valuation
-");
-while ($r = $stmt->fetch()) {
-    $ratingDist[] = $r;
+    return [
+        'totalSurveys' => $totalSurveys,
+        'avgRating' => $avgRating,
+        'totalToday' => $totalToday,
+        'topAgent' => $topAgent,
+        'topAgents' => array_slice($topAgents, 0, 6),
+        'highScore' => $highScore,
+        'highCount' => $highCount,
+        'highPercent' => $highPercent,
+        'ratingDist' => $ratingDist,
+        'trend' => $trend,
+    ];
 }
 
-// Trend over time (by day)
-$trend = [];
-$stmt = $pdo->query("
-    SELECT DATE(date) AS day, AVG(valuation) AS avgscore, COUNT(*) AS total
-    FROM survey
-    GROUP BY day
-    ORDER BY day
-");
-while ($r = $stmt->fetch()) {
-    $trend[] = $r;
+$isDemo = false;
+
+if (envEnabled('FEATURE_CALL_SURVEYS')) {
+    $pdo = db();
+    $rows = $pdo->query("
+        SELECT num, operator, queue, valuation, date
+        FROM survey
+        ORDER BY date DESC
+    ")->fetchAll();
+} else {
+    $demoDataFile = __DIR__ . '/demo_data.php';
+
+    if (!file_exists($demoDataFile)) {
+        echo "<div style='padding:40px;text-align:center'>
+                <h2>🚫 Call Surveys Dashboard Disabled</h2>
+                <p>Contact <b>Gixo</b></p>
+              </div>";
+        exit;
+    }
+
+    $rows = require $demoDataFile;
+    $isDemo = true;
 }
 
-// Top agents
-$topAgents = [];
-$stmt = $pdo->query("
-    SELECT operator, AVG(valuation) AS avgscore, COUNT(*) AS total
-    FROM survey
-    GROUP BY operator
-    ORDER BY avgscore DESC, total DESC
-    LIMIT 6
-");
-while ($r = $stmt->fetch()) {
-    $topAgents[] = $r;
-}
+[
+    'totalSurveys' => $totalSurveys,
+    'avgRating' => $avgRating,
+    'totalToday' => $totalToday,
+    'topAgent' => $topAgent,
+    'topAgents' => $topAgents,
+    'highScore' => $highScore,
+    'highCount' => $highCount,
+    'highPercent' => $highPercent,
+    'ratingDist' => $ratingDist,
+    'trend' => $trend,
+] = computeSurveyMetrics($rows);
 
 // Prepare data for JS
 $ratingDistJson = json_encode($ratingDist);
@@ -173,8 +187,11 @@ $rowsJson        = json_encode($rows);
                 <h1 class="text-xl font-semibold text-slate-50">Call Surveys</h1>
                 <p class="text-xs text-slate-400">Manager dashboard</p>
             </div>
+            <?php if ($isDemo): ?>
+                <div class="chip bg-amber-900/60 text-amber-300 border border-amber-500/40">Demo Data</div>
+            <?php endif; ?>
         </div>
-        <a href="index.php" class="back-link">← Back to Home</a>
+        <a href="../index.php" class="text-sm text-sky-300 hover:text-sky-200">← Back to Home</a>
         <div class="text-right">
             <div class="text-xs text-slate-400 uppercase tracking-widest">Today</div>
             <div class="text-sm text-slate-100">
