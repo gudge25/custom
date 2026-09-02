@@ -13,6 +13,14 @@
  * consumers and legacy inline-config pages can require this directly.
  */
 function requireFreepbxAuth() {
+    // CLI scripts (cron jobs like collect_rtt.php) have no browser session
+    // to check - shell/cron access on the box is already a different trust
+    // boundary. Without this, bootstrap.php's automatic call blocks every
+    // CLI consumer of it.
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+
     if (session_status() !== PHP_SESSION_ACTIVE) {
         session_start();
     }
