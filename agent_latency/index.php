@@ -1,4 +1,7 @@
 <?php
+require_once dirname(__DIR__) . '/freepbx_auth.php';
+requireFreepbxAuth();
+
 /***********************
  * DB CONFIG
  ***********************/
