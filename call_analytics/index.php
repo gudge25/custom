@@ -230,12 +230,6 @@ $callsJson = json_encode($calls);
         </div>
     <?php endif; ?>
 
-    <?php if ($isDemo): ?>
-        <div style="border-radius: 0.75rem; border: 1px solid rgba(245,158,11,0.4); background: rgba(245,158,11,0.1); padding: 10px 14px; font-size: 13px; color: #fbbf24;">
-            Showing demo data. Enable <code>FEATURE_CALL_ANALYTICS</code> to see real call transcripts.
-        </div>
-    <?php endif; ?>
-
     <div class="kpi-grid">
         <div class="card" style="padding: 18px;">
             <div class="kpi-label">Calls Transcribed</div>
