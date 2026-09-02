@@ -40,6 +40,13 @@ function loadEnv($path) {
 $GLOBALS['env'] = loadEnv(__DIR__ . '/.env');
 
 /**
+ * Require a logged-in FreePBX admin session for every bootstrap-integrated
+ * page automatically, so a new page can't forget to add this check.
+ */
+require_once __DIR__ . '/freepbx_auth.php';
+requireFreepbxAuth();
+
+/**
  * Get environment variable by key
  * Example: env('DB_HOST')
  */

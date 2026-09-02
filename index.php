@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/freepbx_auth.php';
+requireFreepbxAuth();
+
 // Simple landing page for PBX custom tools
 ?>
 <!DOCTYPE html>
