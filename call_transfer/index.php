@@ -7,7 +7,7 @@ function formatDuration(int $totalSeconds): string
     $minutes = intdiv($totalSeconds % 3600, 60);
     $seconds = $totalSeconds % 60;
 
-    return sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
+    return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
 }
 
 /**
@@ -46,15 +46,22 @@ $isDemo = false;
 $fromDate = trim((string) ($_POST['from'] ?? date('Y-m-d', strtotime('-6 days'))));
 $toDate = trim((string) ($_POST['to'] ?? date('Y-m-d')));
 
+$datePattern = '/^\d{4}-\d{2}-\d{2}$/';
+$datesValid = preg_match($datePattern, $fromDate) && preg_match($datePattern, $toDate);
+
 if (!envEnabled('FEATURE_CALL_TRANSFER')) {
     $demoFile = __DIR__ . '/demo_data.php';
 
     if (!file_exists($demoFile)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 Call Transfer Report Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
+        renderFeatureDisabled('Call Transfer Report');
+    }
+
+    if (!$datesValid) {
+        // Demo data ignores the requested range entirely, but the Range KPI
+        // below still formats $fromDate/$toDate with date() - fall back to
+        // the default range rather than letting unvalidated input through.
+        $fromDate = date('Y-m-d', strtotime('-6 days'));
+        $toDate = date('Y-m-d');
     }
 
     $mainData = array_map(function (array $row): array {
@@ -67,9 +74,7 @@ if (!envEnabled('FEATURE_CALL_TRANSFER')) {
 
 $debug .= "Requested range: From = $fromDate, To = $toDate\n";
 
-$datePattern = '/^\d{4}-\d{2}-\d{2}$/';
-
-if (!preg_match($datePattern, $fromDate) || !preg_match($datePattern, $toDate)) {
+if (!$datesValid) {
     $error = 'Invalid date format. Please use the date picker.';
     $debug .= "Date validation failed\n";
 } else {

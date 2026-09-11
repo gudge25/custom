@@ -22,14 +22,14 @@ Copy `.env.example` to `.env`. `bootstrap.php` calls `die()` if `.env` is missin
 - `env($key, $default)` — read a config value
 - `envEnabled($key)` — `true` iff the value is exactly `'1'`
 - `db()` — singleton PDO connection built from `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS`
-- `requireFeature($feature, $name)` — call at the top of a page; if the flag is off, prints a disabled message and `exit`s
+- `renderFeatureDisabled($name)` — echoes the shared "🚫 disabled" message and `exit`s; used by the demo-fallback modules when their `demo_data.php` fixture is missing
 
 ## Architecture: two module patterns coexist
 
 This is the most important thing to know before editing a module — **not all modules follow `bootstrap.php`**:
 
 1. **Bootstrap-integrated** (`call_transfer/`, `call_surveys/`, `call_analytics/`, `agent_latency/`, `voicemails/`): `require_once dirname(__DIR__) . '/bootstrap.php';`, then uses `db()`/`env()`/`envEnabled()`. This is the intended pattern for all DB-backed pages going forward.
-2. **Legacy inline-config** (`queue_alert/`): hard-codes its own `$dbHost/$dbName/$dbUser/$dbPass` (`localhost` / `asteriskcdrdb` / `root` / empty password) and opens its own `PDO` connection at the top of the file. Does **not** check any `FEATURE_*` flag and is not wired into `bootstrap.php` at all. If you touch it, prefer migrating it to `bootstrap.php`'s `db()`/`env()`/`requireFeature()` rather than perpetuating the inline pattern.
+2. **Legacy inline-config** (`queue_alert/`): hard-codes its own `$dbHost/$dbName/$dbUser/$dbPass` (`localhost` / `asteriskcdrdb` / `root` / empty password) and opens its own `PDO` connection at the top of the file. Does **not** check any `FEATURE_*` flag and is not wired into `bootstrap.php` at all. If you touch it, prefer migrating it to `bootstrap.php`'s `db()`/`env()`/`envEnabled()` rather than perpetuating the inline pattern.
 3. **Placeholders** (`clean_cdr/`, `clean_recording/`, `ai_agent/`): a title card and a "Back to Home" link only, no logic, no DB access.
 
 The landing page (`index.php` at repo root) just links to all module folders and is not itself gated by feature flags, but it does require an authenticated FreePBX session via `freepbx_auth.php`'s `requireFreepbxAuth()` (also called automatically inside `bootstrap.php`, and directly by non-bootstrap pages).

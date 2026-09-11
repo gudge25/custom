@@ -7,7 +7,7 @@
 function loadEnv($path) {
     // Stop execution if .env file is missing
     if (!file_exists($path)) {
-        die("ENV not found: $path");
+        die("ENV not found. Copy .env.example to .env and configure it.");
     }
 
     // Read file into array (ignore empty lines)
@@ -73,6 +73,11 @@ if (env('APP_ENV') !== 'production') {
 /**
  * Create (or reuse) a PDO database connection
  * Uses singleton pattern (one connection per request)
+ *
+ * Connection failures are left to propagate as a PDOException so callers can
+ * catch them and decide what to show (e.g. gate the raw message behind
+ * APP_ENV) - this function itself must never die()/echo, or every caller's
+ * own error handling becomes unreachable dead code.
  */
 function db() {
     static $pdo;
@@ -85,36 +90,26 @@ function db() {
            ";dbname=" . env('DB_NAME') .
            ";charset=utf8mb4";
 
-    try {
-        $pdo = new PDO($dsn, env('DB_USER'), env('DB_PASS'), [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-        ]);
-    } catch (Exception $e) {
-        // TODO: die() here leaks the raw PDO error message to the browser
-        // regardless of APP_ENV, and bypasses each page's own error handling
-        // (e.g. call_transfer/index.php gates its query-error message behind
-        // APP_ENV, but a connection failure never reaches that code at all).
-        // Should log the detail server-side and show a generic message when
-        // APP_ENV === 'production'.
-        die("DB error: " . $e->getMessage());
-    }
+    $pdo = new PDO($dsn, env('DB_USER'), env('DB_PASS'), [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ]);
 
     return $pdo;
 }
 
 /**
- * Block access to a page if feature is disabled
- * Example: requireFeature('FEATURE_QUEUE_ALERT', 'Queue Alert');
+ * Render the shared "feature disabled" message and stop execution. Used
+ * when a module's FEATURE_* flag is off and it has no demo fallback to show
+ * instead (see call_surveys/, call_analytics/, agent_latency/,
+ * call_transfer/, voicemails/ for the demo-fallback pattern).
  */
-function requireFeature($feature, $name) {
-    if (!envEnabled($feature)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 $name Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
-    }
+function renderFeatureDisabled(string $name): void {
+    echo "<div style='padding:40px;text-align:center'>
+            <h2>🚫 $name Disabled</h2>
+            <p>Contact <b>Gixo</b></p>
+          </div>";
+    exit;
 }
 
 /**

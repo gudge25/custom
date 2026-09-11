@@ -100,11 +100,7 @@ if (envEnabled('FEATURE_CALL_ANALYTICS')) {
     $demoFile = __DIR__ . '/demo_data.php';
 
     if (!file_exists($demoFile)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 Call Analytics Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
+        renderFeatureDisabled('Call Analytics');
     }
 
     foreach (require $demoFile as $call) {

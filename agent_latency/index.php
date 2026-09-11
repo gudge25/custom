@@ -3,8 +3,15 @@ require_once dirname(__DIR__) . '/bootstrap.php';
 
 /**
  * Aggregate a flat list of registration rows into the same shapes the real
- * queries produce (top-5 average table, name options, selected-name series),
- * so the demo fixture and live DB path render identically.
+ * queries produce (top-5 average table, name options, selected-name series).
+ *
+ * This intentionally duplicates the live path's SQL aggregation logic in PHP
+ * rather than sharing one implementation: the live path aggregates in SQL
+ * specifically to avoid pulling every raw registration row (this table can
+ * get frequent heartbeat writes per extension, so a 7-day raw pull could be
+ * large), while the small demo fixture can cheaply aggregate in PHP. If the
+ * live queries' business rules change (top-N cutoff, the 7-day window,
+ * tie-break order), update this function to match.
  */
 function computeAgentLatencyDemo(array $rows, string $selectedName): array
 {
@@ -102,11 +109,7 @@ if (envEnabled('FEATURE_AGENT_LATENCY')) {
     $demoFile = __DIR__ . '/demo_data.php';
 
     if (!file_exists($demoFile)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 Agent Latency Report Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
+        renderFeatureDisabled('Agent Latency Report');
     }
 
     $demo = computeAgentLatencyDemo(require $demoFile, $selectedName);

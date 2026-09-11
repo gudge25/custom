@@ -52,13 +52,15 @@ if (envEnabled('FEATURE_VOICEMAILS')) {
             SELECT calldate, dst, src AS caller, duration AS duration_seconds, recordingfile
             FROM cdr
             WHERE lastapp = 'VoiceMail'
+              AND calldate >= NOW() - INTERVAL 90 DAY
             ORDER BY calldate DESC
             LIMIT 500
         ");
         foreach ($stmt->fetchAll() as $row) {
+            $dst = (string) $row['dst'];
             $rows[] = [
                 'date' => $row['calldate'],
-                'mailbox' => preg_replace('/^vmu/', '', (string) $row['dst']),
+                'mailbox' => str_starts_with($dst, 'vmu') ? substr($dst, 3) : $dst,
                 'caller' => (string) $row['caller'],
                 'duration_seconds' => (int) $row['duration_seconds'],
                 'recordingfile' => (string) $row['recordingfile'],
@@ -73,11 +75,7 @@ if (envEnabled('FEATURE_VOICEMAILS')) {
     $demoFile = __DIR__ . '/demo_data.php';
 
     if (!file_exists($demoFile)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 Voicemails Report Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
+        renderFeatureDisabled('Voicemails Report');
     }
 
     $rows = require $demoFile;
@@ -85,7 +83,7 @@ if (envEnabled('FEATURE_VOICEMAILS')) {
 }
 
 $metrics = computeVoicemailMetrics($rows);
-$rowsJson = json_encode($rows);
+$rowsJson = json_encode($rows, JSON_INVALID_UTF8_SUBSTITUTE);
 ?>
 <!DOCTYPE html>
 <html lang="en">

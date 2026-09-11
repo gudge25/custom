@@ -85,11 +85,7 @@ if (envEnabled('FEATURE_CALL_SURVEYS')) {
     $demoDataFile = __DIR__ . '/demo_data.php';
 
     if (!file_exists($demoDataFile)) {
-        echo "<div style='padding:40px;text-align:center'>
-                <h2>🚫 Call Surveys Dashboard Disabled</h2>
-                <p>Contact <b>Gixo</b></p>
-              </div>";
-        exit;
+        renderFeatureDisabled('Call Surveys Dashboard');
     }
 
     $rows = require $demoDataFile;
