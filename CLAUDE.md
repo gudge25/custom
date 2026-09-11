@@ -24,19 +24,20 @@ Copy `.env.example` to `.env`. `bootstrap.php` calls `die()` if `.env` is missin
 - `db()` — singleton PDO connection built from `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS`
 - `renderFeatureDisabled($name)` — echoes the shared "🚫 disabled" message and `exit`s; used by the demo-fallback modules when their `demo_data.php` fixture is missing
 
-## Architecture: two module patterns coexist
+## Architecture: bootstrap-integrated modules + placeholders
 
-This is the most important thing to know before editing a module — **not all modules follow `bootstrap.php`**:
+Every DB-backed module now follows the same base pattern — this used to be split between a "bootstrap-integrated" and a "legacy inline-config" group, but the last legacy module (`queue_alert/`) was migrated too:
 
-1. **Bootstrap-integrated** (`call_transfer/`, `call_surveys/`, `call_analytics/`, `agent_latency/`, `voicemails/`): `require_once dirname(__DIR__) . '/bootstrap.php';`, then uses `db()`/`env()`/`envEnabled()`. This is the intended pattern for all DB-backed pages going forward.
-2. **Legacy inline-config** (`queue_alert/`): hard-codes its own `$dbHost/$dbName/$dbUser/$dbPass` (`localhost` / `asteriskcdrdb` / `root` / empty password) and opens its own `PDO` connection at the top of the file. Does **not** check any `FEATURE_*` flag and is not wired into `bootstrap.php` at all. If you touch it, prefer migrating it to `bootstrap.php`'s `db()`/`env()`/`envEnabled()` rather than perpetuating the inline pattern.
-3. **Placeholders** (`clean_cdr/`, `clean_recording/`, `ai_agent/`): a title card and a "Back to Home" link only, no logic, no DB access.
+1. **Bootstrap-integrated** (`call_transfer/`, `call_surveys/`, `call_analytics/`, `agent_latency/`, `voicemails/`, `queue_alert/`): `require_once dirname(__DIR__) . '/bootstrap.php';`, then uses `db()`/`env()`/`envEnabled()`. This is the pattern for all DB-backed pages.
+2. **Placeholders** (`clean_cdr/`, `clean_recording/`, `ai_agent/`): a title card and a "Back to Home" link only, no logic, no DB access.
 
 The landing page (`index.php` at repo root) just links to all module folders and is not itself gated by feature flags, but it does require an authenticated FreePBX session via `freepbx_auth.php`'s `requireFreepbxAuth()` (also called automatically inside `bootstrap.php`, and directly by non-bootstrap pages).
 
 ### Demo-data fallback pattern
 
 `call_surveys/`, `call_analytics/`, `agent_latency/`, `call_transfer/`, and `voicemails/` each check `envEnabled('FEATURE_X')`: when on, they query the live DB; when off, they `require` a sibling `demo_data.php` fixture instead and set an `$isDemo` flag that renders an amber "Demo Data" chip next to the page title. `demo_data.php` files return a flat array of rows shaped exactly like the real query's rows (or raw rows a shared compute function can aggregate), and use relative timestamps (`strtotime('-N hours')`) rather than absolute dates so the fixture never looks stale. `call_analytics/` is the one exception: its real query targets `call_transcripts`, a table that doesn't exist yet, so `FEATURE_CALL_ANALYTICS=1` currently surfaces a query error — demo mode is the only working path there today.
+
+`queue_alert/` is bootstrap-integrated but has no demo fallback — it's a write-only settings form (saves to `queue_alert_settings.json`, see below), not a data display, so there's nothing meaningful to fake. It just calls `renderFeatureDisabled('Queue Alert')` directly when `FEATURE_QUEUE_ALERT` is off.
 
 ## Key DB tables (asteriskcdrdb)
 
@@ -53,7 +54,7 @@ None of these schemas are formally documented elsewhere — infer columns from t
 - SQL parameters are passed via PDO prepared statements with named placeholders.
 - Each module's `<style>` block is self-contained and duplicated across files (no shared CSS) — dark gradient background (`#0f172a`/`radial-gradient(...#283c86...)`), `.card`/`.input`/`.btn`/`.chip` utility classes, Tailwind loaded via `<script src="https://cdn.tailwindcss.com">` on the fuller dashboards.
 - `call_transfer/index.php` shows a `Debug Information` panel driven by `env('APP_ENV') !== 'production'` — follow this pattern if adding debug output to a bootstrap-integrated page rather than `var_dump`/`echo`ing directly.
-- `queue_alert/index.php` persists settings to `queue_alert_settings.json` (repo root, git-ignored, created at runtime) rather than the database.
+- `queue_alert/index.php` persists settings to `queue_alert_settings.json` (repo root, git-ignored, created at runtime) rather than the database. Nothing in this repo reads that file back yet — there's no cron/worker that actually fires an alert when a queue threshold is hit, so this page currently only saves the config, not the alerting itself.
 
 ## CI
 

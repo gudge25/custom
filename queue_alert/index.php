@@ -1,14 +1,9 @@
 <?php
-require_once dirname(__DIR__) . '/freepbx_auth.php';
-requireFreepbxAuth();
+require_once dirname(__DIR__) . '/bootstrap.php';
 
-/***********************
- * DB CONFIG (same as new.php)
- ***********************/
-$dbHost = 'localhost';
-$dbName = 'asteriskcdrdb';
-$dbUser = 'root';
-$dbPass = '';
+if (!envEnabled('FEATURE_QUEUE_ALERT')) {
+    renderFeatureDisabled('Queue Alert');
+}
 
 $queueOptions = [];
 $dbError = '';
@@ -18,13 +13,7 @@ $errorMessage = '';
 $settingsFile = __DIR__ . '/../queue_alert_settings.json';
 
 try {
-    $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
-    $options = [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ];
-    $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
-
+    $pdo = db();
     $stmt = $pdo->query("SELECT DISTINCT queue FROM survey WHERE queue IS NOT NULL AND queue <> '' ORDER BY queue ASC");
     $queueOptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
