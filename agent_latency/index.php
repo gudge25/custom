@@ -1,70 +1,124 @@
 <?php
-require_once dirname(__DIR__) . '/freepbx_auth.php';
-requireFreepbxAuth();
+require_once dirname(__DIR__) . '/bootstrap.php';
 
-/***********************
- * DB CONFIG
- ***********************/
-$dbHost = 'localhost';
-$dbName = 'asteriskcdrdb';
-$dbUser = 'root';
-$dbPass = '';
+/**
+ * Aggregate a flat list of registration rows into the same shapes the real
+ * queries produce (top-5 average table, name options, selected-name series).
+ *
+ * This intentionally duplicates the live path's SQL aggregation logic in PHP
+ * rather than sharing one implementation: the live path aggregates in SQL
+ * specifically to avoid pulling every raw registration row (this table can
+ * get frequent heartbeat writes per extension, so a 7-day raw pull could be
+ * large), while the small demo fixture can cheaply aggregate in PHP. If the
+ * live queries' business rules change (top-N cutoff, the 7-day window,
+ * tie-break order), update this function to match.
+ */
+function computeAgentLatencyDemo(array $rows, string $selectedName): array
+{
+    $byName = [];
+    foreach ($rows as $r) {
+        $byName[$r['name']]['sum'] = ($byName[$r['name']]['sum'] ?? 0) + $r['roundtrip_usec'];
+        $byName[$r['name']]['count'] = ($byName[$r['name']]['count'] ?? 0) + 1;
+    }
+
+    $topRows = [];
+    foreach ($byName as $name => $stats) {
+        $topRows[] = ['name' => $name, 'avg_roundtrip' => round($stats['sum'] / $stats['count'] / 1000)];
+    }
+    usort($topRows, fn($a, $b) => $b['avg_roundtrip'] <=> $a['avg_roundtrip']);
+    $topRows = array_slice($topRows, 0, 5);
+
+    $nameOptions = array_keys($byName);
+    sort($nameOptions);
+
+    if ($selectedName === '' && count($nameOptions) > 0) {
+        $selectedName = $nameOptions[0];
+    }
+
+    $chartPoints = [];
+    $chartLabels = [];
+    if ($selectedName !== '') {
+        $seriesRows = array_values(array_filter($rows, fn($r) => $r['name'] === $selectedName));
+        usort($seriesRows, fn($a, $b) => strcmp($a['registration_datetime'], $b['registration_datetime']));
+        foreach ($seriesRows as $row) {
+            $chartPoints[] = round($row['roundtrip_usec'] / 1000, 2);
+            $chartLabels[] = $row['registration_datetime'];
+        }
+    }
+
+    return [
+        'topRows' => $topRows,
+        'nameOptions' => $nameOptions,
+        'selectedName' => $selectedName,
+        'chartPoints' => $chartPoints,
+        'chartLabels' => $chartLabels,
+    ];
+}
 
 $topRows = [];
 $nameOptions = [];
 $chartPoints = [];
 $chartLabels = [];
 $errorMessage = '';
-$selectedName = '';
+$isDemo = false;
 
-try {
-    $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
-    $options = [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ];
-    $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+$selectedName = $_SERVER['REQUEST_METHOD'] === 'POST' ? trim((string) ($_POST['name'] ?? '')) : '';
 
-    $topStmt = $pdo->query(
-        "SELECT name, ROUND(AVG(roundtrip_usec)/1000) AS avg_roundtrip
-         FROM registrations
-         WHERE registration_datetime >= NOW() - INTERVAL 7 DAY
-         GROUP BY name
-         ORDER BY avg_roundtrip DESC
-         LIMIT 5"
-    );
-    $topRows = $topStmt->fetchAll();
+if (envEnabled('FEATURE_AGENT_LATENCY')) {
+    try {
+        $pdo = db();
 
-    $nameStmt = $pdo->query("SELECT DISTINCT name FROM registrations ORDER BY name ASC");
-    $nameOptions = $nameStmt->fetchAll(PDO::FETCH_COLUMN);
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $selectedName = trim($_POST['name'] ?? '');
-    }
-
-    if ($selectedName === '' && count($nameOptions) > 0) {
-        $selectedName = (string)$nameOptions[0];
-    }
-
-    if ($selectedName !== '') {
-        $seriesStmt = $pdo->prepare(
-            "SELECT roundtrip_usec, registration_datetime
+        $topStmt = $pdo->query(
+            "SELECT name, ROUND(AVG(roundtrip_usec)/1000) AS avg_roundtrip
              FROM registrations
-             WHERE name = :name
-               AND registration_datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-             ORDER BY registration_datetime ASC"
+             WHERE registration_datetime >= NOW() - INTERVAL 7 DAY
+             GROUP BY name
+             ORDER BY avg_roundtrip DESC
+             LIMIT 5"
         );
-        $seriesStmt->execute(['name' => $selectedName]);
-        $seriesRows = $seriesStmt->fetchAll();
+        $topRows = $topStmt->fetchAll();
 
-        foreach ($seriesRows as $row) {
-            $chartPoints[] = round(((float)$row['roundtrip_usec']) / 1000, 2);
-            $chartLabels[] = $row['registration_datetime'];
+        $nameStmt = $pdo->query("SELECT DISTINCT name FROM registrations ORDER BY name ASC");
+        $nameOptions = $nameStmt->fetchAll(PDO::FETCH_COLUMN);
 
+        if ($selectedName === '' && count($nameOptions) > 0) {
+            $selectedName = (string) $nameOptions[0];
         }
+
+        if ($selectedName !== '') {
+            $seriesStmt = $pdo->prepare(
+                "SELECT roundtrip_usec, registration_datetime
+                 FROM registrations
+                 WHERE name = :name
+                   AND registration_datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                 ORDER BY registration_datetime ASC"
+            );
+            $seriesStmt->execute(['name' => $selectedName]);
+            $seriesRows = $seriesStmt->fetchAll();
+
+            foreach ($seriesRows as $row) {
+                $chartPoints[] = round(((float)$row['roundtrip_usec']) / 1000, 2);
+                $chartLabels[] = $row['registration_datetime'];
+
+            }
+        }
+    } catch (Throwable $e) {
+        $errorMessage = 'Failed to load latency data. Please check DB connection/settings.';
     }
-} catch (Throwable $e) {
-    $errorMessage = 'Failed to load latency data. Please check DB connection/settings.';
+} else {
+    $demoFile = __DIR__ . '/demo_data.php';
+
+    if (!file_exists($demoFile)) {
+        renderFeatureDisabled('Agent Latency Report');
+    }
+
+    $demo = computeAgentLatencyDemo(require $demoFile, $selectedName);
+    $topRows = $demo['topRows'];
+    $nameOptions = $demo['nameOptions'];
+    $selectedName = $demo['selectedName'];
+    $chartPoints = $demo['chartPoints'];
+    $chartLabels = $demo['chartLabels'];
+    $isDemo = true;
 }
 ?>
 <!DOCTYPE html>
@@ -149,6 +203,10 @@ try {
                 <h1 class="text-xl font-semibold text-slate-50">Agent Latency Report</h1>
                 <p class="text-xs text-slate-400">Registration latency monitoring</p>
             </div>
+            <?php if ($isDemo): ?>
+                <div class="chip bg-amber-900/60 text-amber-300 border border-amber-500/40">Demo Data</div>
+                <span class="text-xs text-slate-400">For a fully functional version, please contact us.</span>
+            <?php endif; ?>
         </div>
         <div class="text-right">
             <div class="text-xs text-slate-400 uppercase tracking-widest">Today</div>

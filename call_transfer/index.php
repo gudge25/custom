@@ -1,15 +1,38 @@
 <?php
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-requireFeature('FEATURE_CALL_TRANSFER', 'Call Transfer Report');
-
 function formatDuration(int $totalSeconds): string
 {
     $hours = intdiv($totalSeconds, 3600);
     $minutes = intdiv($totalSeconds % 3600, 60);
     $seconds = $totalSeconds % 60;
 
-    return sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
+    return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+}
+
+/**
+ * Derive the per-account summary from raw transfer rows the same way the
+ * live SQL summary query does, so the demo fixture and the live path render
+ * identically.
+ */
+function summarizeTransfers(array $mainRows): array
+{
+    $byAcct = [];
+    foreach ($mainRows as $row) {
+        $byAcct[$row['acct']] = ($byAcct[$row['acct']] ?? 0) + $row['duration_seconds'];
+    }
+
+    $summary = [];
+    foreach ($byAcct as $acct => $totalSeconds) {
+        $summary[] = [
+            'acct' => $acct,
+            'total_patchtime' => formatDuration($totalSeconds),
+            'total_seconds' => $totalSeconds,
+        ];
+    }
+    usort($summary, fn($a, $b) => strcmp($a['acct'], $b['acct']));
+
+    return $summary;
 }
 
 $pageName = 'Call Transfer Report';
@@ -18,15 +41,40 @@ $mainData = [];
 $error = '';
 $debug = '';
 $showDebug = env('APP_ENV') !== 'production';
+$isDemo = false;
 
 $fromDate = trim((string) ($_POST['from'] ?? date('Y-m-d', strtotime('-6 days'))));
 $toDate = trim((string) ($_POST['to'] ?? date('Y-m-d')));
 
+$datePattern = '/^\d{4}-\d{2}-\d{2}$/';
+$datesValid = preg_match($datePattern, $fromDate) && preg_match($datePattern, $toDate);
+
+if (!envEnabled('FEATURE_CALL_TRANSFER')) {
+    $demoFile = __DIR__ . '/demo_data.php';
+
+    if (!file_exists($demoFile)) {
+        renderFeatureDisabled('Call Transfer Report');
+    }
+
+    if (!$datesValid) {
+        // Demo data ignores the requested range entirely, but the Range KPI
+        // below still formats $fromDate/$toDate with date() - fall back to
+        // the default range rather than letting unvalidated input through.
+        $fromDate = date('Y-m-d', strtotime('-6 days'));
+        $toDate = date('Y-m-d');
+    }
+
+    $mainData = array_map(function (array $row): array {
+        $row['patchtime'] = formatDuration($row['duration_seconds']);
+        return $row;
+    }, require $demoFile);
+    $summaryData = summarizeTransfers($mainData);
+    $isDemo = true;
+} else {
+
 $debug .= "Requested range: From = $fromDate, To = $toDate\n";
 
-$datePattern = '/^\d{4}-\d{2}-\d{2}$/';
-
-if (!preg_match($datePattern, $fromDate) || !preg_match($datePattern, $toDate)) {
+if (!$datesValid) {
     $error = 'Invalid date format. Please use the date picker.';
     $debug .= "Date validation failed\n";
 } else {
@@ -94,6 +142,7 @@ if (!preg_match($datePattern, $fromDate) || !preg_match($datePattern, $toDate)) 
         $debug .= 'Query failed: ' . $e->getMessage() . "\n";
     }
 }
+}
 
 $totalTransfers = count($mainData);
 $totalSeconds = array_sum(array_column($mainData, 'duration_seconds'));
@@ -134,6 +183,13 @@ $isMonthPreset = $fromDate === date('Y-m-01') && $toDate === date('Y-m-d');
         .input:focus {
             border-color: rgba(14,165,233,0.8);
             box-shadow: 0 0 0 2px rgba(14,165,233,0.25);
+        }
+        .chip {
+            border-radius: 999px;
+            padding: 0.1rem 0.55rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
         .btn {
             border-radius: 0.75rem;
@@ -247,6 +303,10 @@ $isMonthPreset = $fromDate === date('Y-m-01') && $toDate === date('Y-m-d');
                 <h1 class="text-xl font-semibold text-slate-50">Call Transfer Report</h1>
                 <p class="text-xs text-slate-400">Outbound call transfer analysis</p>
             </div>
+            <?php if ($isDemo): ?>
+                <div class="chip bg-amber-900/60 text-amber-300 border border-amber-500/40">Demo Data</div>
+                <span class="text-xs text-slate-400">For a fully functional version, please contact us.</span>
+            <?php endif; ?>
         </div>
         <div class="text-right">
             <div class="text-xs text-slate-400 uppercase tracking-widest">Today</div>
@@ -255,6 +315,11 @@ $isMonthPreset = $fromDate === date('Y-m-01') && $toDate === date('Y-m-d');
     </div>
 
     <div class="max-w-6xl mx-auto">
+        <?php if ($isDemo): ?>
+            <div class="card p-6 mb-6 text-sm text-slate-400">
+                Showing a fixed demo dataset. Date filtering will be available once live data is enabled.
+            </div>
+        <?php else: ?>
         <div class="card p-6 mb-6">
             <div class="flex gap-2 mb-4">
                 <button type="button" class="preset<?php echo $isTodayPreset ? ' preset-active' : ''; ?>" onclick="return applyPreset(event, 0)">Today</button>
@@ -296,6 +361,7 @@ $isMonthPreset = $fromDate === date('Y-m-01') && $toDate === date('Y-m-d');
                 </div>
             </form>
         </div>
+        <?php endif; ?>
 
         <?php if ($error !== ''): ?>
             <div class="mb-4 max-w-6xl rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
