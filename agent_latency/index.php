@@ -202,6 +202,7 @@ if (envEnabled('FEATURE_AGENT_LATENCY')) {
             </div>
             <?php if ($isDemo): ?>
                 <div class="chip bg-amber-900/60 text-amber-300 border border-amber-500/40">Demo Data</div>
+                <span class="text-xs text-slate-400">For a fully functional version, please contact us.</span>
             <?php endif; ?>
         </div>
         <div class="text-right">

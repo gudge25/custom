@@ -194,7 +194,7 @@ requireFreepbxAuth();
         <a class="module-card" href="voicemails/" title="Open voicemails report page">
             <div class="module-card-header">
                 <div class="icon-badge">📬</div>
-                <span class="chip chip-soon"><span class="chip-dot"></span>Coming soon</span>
+                <span class="chip chip-live"><span class="chip-dot"></span>Live</span>
             </div>
             <div>
                 <div class="module-title">Voicemails Report</div>

@@ -148,6 +148,7 @@ $rowsJson = json_encode($rows);
             </div>
             <?php if ($isDemo): ?>
                 <div class="chip bg-amber-900/60 text-amber-300 border border-amber-500/40">Demo Data</div>
+                <span class="text-xs text-slate-400">For a fully functional version, please contact us.</span>
             <?php endif; ?>
         </div>
         <a href="../index.php" class="text-sm text-sky-300 hover:text-sky-200">← Back to Home</a>

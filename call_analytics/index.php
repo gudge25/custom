@@ -216,6 +216,7 @@ $callsJson = json_encode($calls);
             </div>
             <?php if ($isDemo): ?>
                 <span class="chip" style="background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); margin-left: 6px;">Demo Data</span>
+                <span style="font-size: 12px; color: #94a3b8;">For a fully functional version, please contact us.</span>
             <?php endif; ?>
         </div>
         <div style="text-align: right;">
