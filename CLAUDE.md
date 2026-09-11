@@ -36,15 +36,14 @@ The landing page (`index.php` at repo root) just links to all module folders and
 
 ### Demo-data fallback pattern
 
-`call_surveys/`, `call_analytics/`, `agent_latency/`, `call_transfer/`, and `voicemails/` each check `envEnabled('FEATURE_X')`: when on, they query the live DB; when off, they `require` a sibling `demo_data.php` fixture instead and set an `$isDemo` flag that renders an amber "Demo Data" chip next to the page title. `demo_data.php` files return a flat array of rows shaped exactly like the real query's rows (or raw rows a shared compute function can aggregate), and use relative timestamps (`strtotime('-N hours')`) rather than absolute dates so the fixture never looks stale. `call_analytics/` and `voicemails/` currently have no real query implemented yet (`call_transcripts` and the voicemail table don't exist) — when their flag is on, they show a plain "not wired up" message rather than guessing a schema.
+`call_surveys/`, `call_analytics/`, `agent_latency/`, `call_transfer/`, and `voicemails/` each check `envEnabled('FEATURE_X')`: when on, they query the live DB; when off, they `require` a sibling `demo_data.php` fixture instead and set an `$isDemo` flag that renders an amber "Demo Data" chip next to the page title. `demo_data.php` files return a flat array of rows shaped exactly like the real query's rows (or raw rows a shared compute function can aggregate), and use relative timestamps (`strtotime('-N hours')`) rather than absolute dates so the fixture never looks stale. `call_analytics/` is the one exception: its real query targets `call_transcripts`, a table that doesn't exist yet, so `FEATURE_CALL_ANALYTICS=1` currently surfaces a query error — demo mode is the only working path there today.
 
 ## Key DB tables (asteriskcdrdb)
 
-- `cdr` — Asterisk call detail records; used by `call_transfer/` (`clid`, `duration`, `accountcode`, `dst`, `src`, `dstchannel`, `calldate`, `uniqueid`, `lastapp`, `linkedid`)
+- `cdr` — Asterisk call detail records; used by `call_transfer/` (`clid`, `duration`, `accountcode`, `dst`, `src`, `dstchannel`, `calldate`, `uniqueid`, `lastapp`, `linkedid`) and by `voicemails/` (rows where `lastapp = 'VoiceMail'`; mailbox is `dst` with its `vmu` prefix stripped, caller is `src`, `duration`, `recordingfile` — empty string when no recording was captured). There's no listened/unheard flag in CDR; that lives in Asterisk's voicemail spool, not this DB.
 - `survey` — post-call survey results; used by `call_surveys/` and `queue_alert/` (`num`, `operator`, `queue`, `valuation`, `date`)
 - `registrations` — voice-agent SIP registration latency; used by `agent_latency/` (`name`, `roundtrip_usec`, `registration_datetime`)
 - `call_transcripts` — **not implemented yet**; `call_analytics/index.php` queries it (`id`, `calldate`, `agent`, `extension`, `caller`, `duration_seconds`, `snippet`, `turns`, `action_items`, `has_redacted_pii`) but the table and its ingestion job don't exist, so `FEATURE_CALL_ANALYTICS=1` currently surfaces a query error — demo mode is the only working path today.
-- Voicemail data source — **not defined**; `voicemails/index.php` has no real query at all, only its demo fixture, until the FreePBX/Asterisk voicemail table/columns are decided.
 
 None of these schemas are formally documented elsewhere — infer columns from the queries in each module when making changes.
 

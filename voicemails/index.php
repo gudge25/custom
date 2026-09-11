@@ -3,12 +3,13 @@ require_once dirname(__DIR__) . '/bootstrap.php';
 
 /**
  * Aggregate a flat list of voicemail rows into the KPI values this page
- * shows - used for the demo fixture so its numbers are always consistent.
+ * shows - used for both real DB rows and the demo fixture, so the two can
+ * never drift apart.
  */
 function computeVoicemailMetrics(array $rows): array
 {
     $total = count($rows);
-    $newCount = count(array_filter($rows, fn($r) => $r['status'] === 'new'));
+    $withRecording = count(array_filter($rows, fn($r) => $r['recordingfile'] !== ''));
     $totalSeconds = array_sum(array_column($rows, 'duration_seconds'));
     $avgSeconds = $total ? (int) round($totalSeconds / $total) : 0;
 
@@ -27,7 +28,7 @@ function computeVoicemailMetrics(array $rows): array
 
     return [
         'total' => $total,
-        'newCount' => $newCount,
+        'withRecording' => $withRecording,
         'avgDuration' => sprintf('%d:%02d', intdiv($avgSeconds, 60), $avgSeconds % 60),
         'busiestMailbox' => $busiestMailbox,
         'busiestCount' => $busiestCount,
@@ -40,11 +41,34 @@ $error = '';
 $rows = [];
 
 if (envEnabled('FEATURE_VOICEMAILS')) {
-    // NOTE: the live voicemail data source (table/columns) isn't defined yet
-    // for this FreePBX install, so there's nothing to query here. Show a
-    // clear message rather than guessing a schema - see call_analytics for
-    // the same pattern applied to its not-yet-built call_transcripts table.
-    $error = 'Live voicemail data isn\'t wired up yet. Contact Gixo to enable this.';
+    // Voicemails aren't a separate table - FreePBX/Asterisk logs each one as
+    // a `cdr` row with lastapp = 'VoiceMail' and dst = "vmu<mailbox>". CDR
+    // has no listened/unheard flag (that lives in Asterisk's voicemail
+    // spool, not this DB), so "has a recording file" stands in as the one
+    // real signal available here.
+    try {
+        $pdo = db();
+        $stmt = $pdo->query("
+            SELECT calldate, dst, src AS caller, duration AS duration_seconds, recordingfile
+            FROM cdr
+            WHERE lastapp = 'VoiceMail'
+            ORDER BY calldate DESC
+            LIMIT 500
+        ");
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[] = [
+                'date' => $row['calldate'],
+                'mailbox' => preg_replace('/^vmu/', '', (string) $row['dst']),
+                'caller' => (string) $row['caller'],
+                'duration_seconds' => (int) $row['duration_seconds'],
+                'recordingfile' => (string) $row['recordingfile'],
+            ];
+        }
+    } catch (PDOException $e) {
+        $error = env('APP_ENV') !== 'production'
+            ? 'Query error: ' . $e->getMessage()
+            : 'Something went wrong loading voicemails. Please try again or contact support.';
+    }
 } else {
     $demoFile = __DIR__ . '/demo_data.php';
 
@@ -100,8 +124,8 @@ $rowsJson = json_encode($rows);
             font-weight: 600;
             text-transform: uppercase;
         }
-        .status-new { color: #4ade80; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); }
-        .status-old { color: #94a3b8; background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.3); }
+        .status-yes { color: #4ade80; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); }
+        .status-no { color: #94a3b8; background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.3); }
         .table-container {
             max-height: 480px;
             overflow: auto;
@@ -142,8 +166,8 @@ $rowsJson = json_encode($rows);
                 <div class="text-3xl font-semibold text-slate-50"><?php echo $metrics['total']; ?></div>
             </div>
             <div class="card p-4">
-                <div class="text-xs text-slate-400 uppercase tracking-widest mb-2">New / Unheard</div>
-                <div class="text-3xl font-semibold text-emerald-400"><?php echo $metrics['newCount']; ?></div>
+                <div class="text-xs text-slate-400 uppercase tracking-widest mb-2">With Recording</div>
+                <div class="text-3xl font-semibold text-emerald-400"><?php echo $metrics['withRecording']; ?></div>
             </div>
             <div class="card p-4">
                 <div class="text-xs text-slate-400 uppercase tracking-widest mb-2">Avg Duration</div>
@@ -173,7 +197,7 @@ $rowsJson = json_encode($rows);
                         <th class="py-2 px-3 text-slate-400 font-medium">Mailbox</th>
                         <th class="py-2 px-3 text-slate-400 font-medium">Caller</th>
                         <th class="py-2 px-3 text-slate-400 font-medium">Duration</th>
-                        <th class="py-2 px-3 text-slate-400 font-medium">Status</th>
+                        <th class="py-2 px-3 text-slate-400 font-medium">Recording</th>
                     </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -220,9 +244,10 @@ $rowsJson = json_encode($rows);
                 tr.appendChild(cell('td', r.caller, 'py-1.5 px-3 text-slate-300'));
                 tr.appendChild(cell('td', formatDuration(r.duration_seconds), 'py-1.5 px-3 text-slate-300'));
 
+                const hasRecording = r.recordingfile !== '';
                 const statusTd = document.createElement('td');
                 statusTd.className = 'py-1.5 px-3';
-                statusTd.appendChild(cell('span', r.status, `status-badge status-${r.status}`));
+                statusTd.appendChild(cell('span', hasRecording ? 'Yes' : 'No', `status-badge status-${hasRecording ? 'yes' : 'no'}`));
                 tr.appendChild(statusTd);
 
                 tbody.appendChild(tr);
